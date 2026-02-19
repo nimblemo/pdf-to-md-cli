@@ -10,39 +10,60 @@ use crate::transformations::{
     stats::CalculateGlobalStats, to_markdown::ToMarkdown,
 };
 
+#[cfg(target_os = "windows")]
+const PDFIUM_BINARY: &[u8] = include_bytes!("../lib/pdfium.dll");
+#[cfg(target_os = "linux")]
+const PDFIUM_BINARY: &[u8] = include_bytes!("../lib/libpdfium.so");
+#[cfg(target_os = "macos")]
+const PDFIUM_BINARY: &[u8] = include_bytes!("../lib/libpdfium.dylib");
+
+fn init_pdfium_library() -> Result<Box<dyn PdfiumLibraryBindings>> {
+    let temp_dir = std::env::temp_dir();
+
+    let lib_name = if cfg!(target_os = "windows") {
+        "pdfium.dll"
+    } else if cfg!(target_os = "linux") {
+        "libpdfium.so"
+    } else {
+        "libpdfium.dylib"
+    };
+
+    let pdfium_path = temp_dir.join(lib_name);
+
+    // Try to write the DLL if it doesn't exist or if we want to ensure it's fresh
+    if !pdfium_path.exists() {
+        std::fs::write(&pdfium_path, PDFIUM_BINARY)?;
+    }
+
+    Ok(
+        Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path(
+            temp_dir.to_str().unwrap_or("."),
+        ))
+        .or_else(|_| Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name()))?,
+    )
+}
+
 /// Convert a PDF file at `path` to a Markdown string.
 pub fn convert_file(path: &Path, verbose: bool) -> Result<String> {
     if verbose {
-        eprintln!("Loading PDF from: {}", path.display());
+        crate::logger!("Loading PDF from: {}", path.display());
     }
 
     // Initialize Pdfium in main thread to verify library is present, then drop it.
     {
-        let _ = Pdfium::new(
-            Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path("./lib/"))
-                .or_else(|_| {
-                    Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path("./"))
-                })
-                .or_else(|_| Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name()))?,
-        );
+        let _ = Pdfium::new(init_pdfium_library()?);
     }
 
     // Load Document to get page count
     // We create a separate Pdfium instance just to get the page count from the file.
     let total_pages = {
-        let pdfium = Pdfium::new(
-            Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path("./lib/"))
-                .or_else(|_| {
-                    Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path("./"))
-                })
-                .or_else(|_| Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name()))?,
-        );
+        let pdfium = Pdfium::new(init_pdfium_library()?);
         let document = pdfium.load_pdf_from_file(path, None)?;
         document.pages().len()
     };
 
     if verbose {
-        eprintln!("Total pages: {}", total_pages);
+        crate::logger!("Total pages: {}", total_pages);
     }
 
     // 3. Extract Pages Parallelly
@@ -59,7 +80,7 @@ pub fn convert_file(path: &Path, verbose: bool) -> Result<String> {
         .collect();
 
     if verbose {
-        eprintln!(
+        crate::logger!(
             "Processing {} pages using {} threads ({} chunks)...",
             total_pages,
             num_threads,
@@ -73,14 +94,8 @@ pub fn convert_file(path: &Path, verbose: bool) -> Result<String> {
         .par_iter()
         .map(|&(start, end)| {
             // Each thread creates its own Pdfium instance
-            let pdfium = Pdfium::new(
-                Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path("./lib/"))
-                    .or_else(|_| {
-                        Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path("./"))
-                    })
-                    .or_else(|_| Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name()))
-                    .expect("Failed to bind Pdfium in thread"),
-            );
+            let pdfium =
+                Pdfium::new(init_pdfium_library().expect("Failed to bind Pdfium in thread"));
 
             let doc = pdfium
                 .load_pdf_from_file(path, None)
@@ -104,7 +119,7 @@ pub fn convert_file(path: &Path, verbose: bool) -> Result<String> {
                 if verbose {
                     let c = extraction_counter.fetch_add(1, Ordering::Relaxed) + 1;
                     if c % 10 == 0 || c == total_pages as usize {
-                        eprintln!("Extracted page {}/{}", c, total_pages);
+                        crate::logger!("Extracted page {}/{}", c, total_pages);
                     }
                 }
             }
@@ -117,7 +132,7 @@ pub fn convert_file(path: &Path, verbose: bool) -> Result<String> {
     pages.sort_by_key(|p| p.index);
 
     if verbose {
-        eprintln!(
+        crate::logger!(
             "Extracted {} pages in total. Calculating global stats...",
             pages.len()
         );
@@ -144,18 +159,18 @@ pub fn convert_file(path: &Path, verbose: bool) -> Result<String> {
     // 5. Run Transformation Pipeline
 
     if verbose {
-        eprintln!("Running RemoveRepetitiveElements...");
+        crate::logger!("Running RemoveRepetitiveElements...");
     }
     use crate::transformations::remove_repetitive_elements::RemoveRepetitiveElements;
     RemoveRepetitiveElements { verbose }.transform(&mut result);
 
     if verbose {
-        eprintln!("Running CompactLines...");
+        crate::logger!("Running CompactLines...");
     }
     CompactLines { verbose }.transform(&mut result);
 
     if verbose {
-        eprintln!("Running DetectCodeBlocks...");
+        crate::logger!("Running DetectCodeBlocks...");
     }
     use crate::transformations::detect_code_blocks::DetectCodeBlocks;
     DetectCodeBlocks { verbose }.transform(&mut result);

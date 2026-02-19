@@ -1,4 +1,5 @@
 mod converter;
+mod logger;
 mod models;
 mod processor;
 mod transformations;
@@ -37,6 +38,10 @@ struct Cli {
     /// Print debug information
     #[arg(short = 'v', long = "verbose")]
     verbose: bool,
+
+    /// Write verbose logs to a file instead of stderr
+    #[arg(short = 'l', long = "log-file", value_name = "FILE")]
+    log_file: Option<PathBuf>,
 }
 
 fn main() -> Result<()> {
@@ -58,6 +63,7 @@ fn main() -> Result<()> {
         cli.name.as_deref(),
         cli.stdout,
         cli.verbose,
+        cli.log_file.as_deref(),
     )?;
 
     Ok(())

@@ -40,15 +40,26 @@ impl Transformation for DetectHeaders {
             for item in &page.items {
                 if let crate::models::ItemType::LineItem(line) = item {
                     // Check if it's a list item - skip if so
-                    let text = line.items.iter().map(|i| &i.text).fold(String::new(), |a, b| a + b);
+                    let text = line
+                        .items
+                        .iter()
+                        .map(|i| &i.text)
+                        .fold(String::new(), |a, b| a + b);
                     // Simple list item check (start with - or * or number.)
-                    let is_list_item = text.trim().starts_with('-') || text.trim().starts_with('*') 
-                        || (text.trim().chars().next().map_or(false, |c| c.is_numeric()) && text.trim().contains('.'));
+                    let is_list_item = text.trim().starts_with('-')
+                        || text.trim().starts_with('*')
+                        || (text.trim().chars().next().map_or(false, |c| c.is_numeric())
+                            && text.trim().contains('.'));
 
                     let h = line.items.iter().map(|i| i.font_size).fold(0.0, f64::max);
 
                     if self.verbose && page.index == 0 {
-                         eprintln!("Page 0 Line: '{}', height={}, min_header={}", text.trim(), h, min_header_height);
+                        crate::logger!(
+                            "Page 0 Line: '{}', height={}, min_header={}",
+                            text.trim(),
+                            h,
+                            min_header_height
+                        );
                     }
 
                     if h > min_header_height && !is_list_item {
@@ -60,18 +71,22 @@ impl Transformation for DetectHeaders {
             }
         }
         distinct_heights.sort_by(|a, b| b.partial_cmp(a).unwrap());
-        
+
         if self.verbose {
-            eprintln!("DetectHeaders: distinct_heights={:?}", distinct_heights);
+            crate::logger!("DetectHeaders: distinct_heights={:?}", distinct_heights);
         }
 
         // 3. Apply Title Page & Height Logic
         let max_height = result.globals.max_height;
         let min_2nd_level = most_used_height + ((max_height - most_used_height) / 4.0);
-        
+
         if self.verbose {
-            eprintln!("DetectHeaders: most_used_height={}, max_height={}, min_2nd_level={}", 
-                most_used_height, max_height, min_2nd_level);
+            crate::logger!(
+                "DetectHeaders: most_used_height={}, max_height={}, min_2nd_level={}",
+                most_used_height,
+                max_height,
+                min_2nd_level
+            );
         }
 
         let most_used_dist = globals.most_used_distance;
@@ -144,8 +159,9 @@ impl Transformation for DetectHeaders {
                             .join("");
 
                         // Check for **Wrapped Header**
-                        let is_bold_wrapped = text.trim().starts_with("**") && text.trim().ends_with("**");
-                        
+                        let is_bold_wrapped =
+                            text.trim().starts_with("**") && text.trim().ends_with("**");
+
                         if is_bold_wrapped && text.len() < 150 {
                             // Strip ** from text items
                             if let Some(first) = line.items.first_mut() {
@@ -162,9 +178,14 @@ impl Transformation for DetectHeaders {
                                     }
                                 }
                             }
-                            
+
                             // Re-evaluate text
-                            let clean_text = line.items.iter().map(|i| i.text.as_str()).collect::<Vec<_>>().join("");
+                            let clean_text = line
+                                .items
+                                .iter()
+                                .map(|i| i.text.as_str())
+                                .collect::<Vec<_>>()
+                                .join("");
                             if clean_text.trim().is_empty() {
                                 continue; // Don't make empty header
                             }
@@ -178,25 +199,32 @@ impl Transformation for DetectHeaders {
                             detected_headers += 1;
                             continue;
                         }
-                        
+
                         // Check for All-Bold Lines (e.g. "Join our community on", "Discord")
                         // If a line is short, isolated, and ALL bold, treat as Header.
                         let is_all_bold = line.items.iter().all(|i| {
-                            matches!(i.format, Some(crate::models::WordFormat::Bold) | Some(crate::models::WordFormat::BoldItalic))
+                            matches!(
+                                i.format,
+                                Some(crate::models::WordFormat::Bold)
+                                    | Some(crate::models::WordFormat::BoldItalic)
+                            )
                         });
 
                         if is_all_bold && text.len() < 100 {
                             // Check isolation
                             let y = line.y;
-                            let line_pos = line_ys.iter().position(|&ly| (ly - y).abs() < 0.1).unwrap_or(0);
+                            let line_pos = line_ys
+                                .iter()
+                                .position(|&ly| (ly - y).abs() < 0.1)
+                                .unwrap_or(0);
                             let mut isolated_top = true;
-                            
+
                             if line_pos > 0 {
                                 if (line_ys[line_pos - 1] - y).abs() < most_used_dist * 1.5 {
                                     isolated_top = false;
                                 }
                             }
-                            
+
                             if isolated_top {
                                 line.block_type = BlockType::H2; // Default to H2 for bold headers
                                 detected_headers += 1;
@@ -244,7 +272,7 @@ impl Transformation for DetectHeaders {
         }
 
         if self.verbose {
-            eprintln!("DetectHeaders: Found {} headers", detected_headers);
+            crate::logger!("DetectHeaders: Found {} headers", detected_headers);
         }
     }
 }

@@ -3,6 +3,8 @@ use rayon::prelude::*;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
+use crate::logger::set_logger;
+
 /// Entry point for processing: handles single file or directory.
 pub fn run(
     input: &Path,
@@ -10,16 +12,23 @@ pub fn run(
     output_name: Option<&str>,
     stdout: bool,
     verbose: bool,
+    log_file: Option<&Path>,
 ) -> Result<()> {
+    if let Some(path) = log_file {
+        let file = std::fs::File::create(path)
+            .with_context(|| format!("Failed to create log file: {}", path.display()))?;
+        set_logger(file);
+    }
+
     let files = collect_pdf_files(input)?;
 
     if files.is_empty() {
-        eprintln!("No PDF files found in: {}", input.display());
+        crate::logger!("No PDF files found in: {}", input.display());
         return Ok(());
     }
 
     if verbose {
-        eprintln!(
+        crate::logger!(
             "Processing {} PDF file(s) using {} threads...",
             files.len(),
             rayon::current_num_threads()
@@ -45,7 +54,7 @@ pub fn run(
     let mut had_error = false;
     for result in results {
         if let Err(e) = result {
-            eprintln!("Error: {:#}", e);
+            crate::logger!("Error: {:#}", e);
             had_error = true;
         }
     }
@@ -101,7 +110,7 @@ fn process_single_file(
 
     // Only print progress if processing multiple files or verbose
     if verbose || total_files > 1 {
-        eprintln!("Converting: {}", input_path.display());
+        crate::logger!("Converting: {}", input_path.display());
     }
 
     let markdown = crate::converter::convert_file(input_path, verbose)
@@ -134,10 +143,10 @@ fn process_single_file(
 
     if verbose || total_files > 1 {
         let duration = start.elapsed();
-        eprintln!("Finished: {} in {:.2?}", output_path.display(), duration);
+        crate::logger!("Finished: {} in {:.2?}", output_path.display(), duration);
     } else {
         // Single file quiet mode
-        eprintln!("Created: {}", output_path.display());
+        crate::logger!("Created: {}", output_path.display());
     }
 
     Ok(())

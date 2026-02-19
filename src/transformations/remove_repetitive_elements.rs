@@ -1,7 +1,7 @@
 use crate::models::{ItemType, ParseResult};
 use crate::transformations::common::Transformation;
-use std::collections::HashMap;
 use std::collections::hash_map::DefaultHasher;
+use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 
 pub struct RemoveRepetitiveElements {
@@ -18,7 +18,7 @@ impl Transformation for RemoveRepetitiveElements {
         // Store min/max hash for each page
         let mut min_line_hashes: Vec<u64> = Vec::with_capacity(total_pages);
         let mut max_line_hashes: Vec<u64> = Vec::with_capacity(total_pages);
-        
+
         // First pass: Calculate hashes
         for page in &result.pages {
             let (min_hash, max_hash) = calculate_page_hashes(&page.items);
@@ -46,7 +46,10 @@ impl Transformation for RemoveRepetitiveElements {
         let threshold = threshold.max(3);
 
         if self.verbose {
-            eprintln!("RemoveRepetitiveElements: threshold={}, total_pages={}", threshold, total_pages);
+            crate::logger!(
+                "RemoveRepetitiveElements: Analyzing {} pages...",
+                result.pages.len()
+            );
         }
 
         // Second pass: Remove items
@@ -64,11 +67,15 @@ impl Transformation for RemoveRepetitiveElements {
                 // Find min/max Y for THIS page (re-calculate as we need exact Y)
                 let mut min_y = f64::MAX;
                 let mut max_y = f64::MIN;
-                
+
                 for item in &page.items {
                     if let Some(y) = get_item_y(item) {
-                         if y < min_y { min_y = y; }
-                         if y > max_y { max_y = y; }
+                        if y < min_y {
+                            min_y = y;
+                        }
+                        if y > max_y {
+                            max_y = y;
+                        }
                     }
                 }
 
@@ -83,7 +90,7 @@ impl Transformation for RemoveRepetitiveElements {
 
                         if is_min && remove_min {
                             keep = false;
-                            removed_footers += 1; 
+                            removed_footers += 1;
                         }
                         if is_max && remove_max {
                             keep = false;
@@ -99,8 +106,14 @@ impl Transformation for RemoveRepetitiveElements {
         }
 
         if self.verbose {
-            eprintln!("RemoveRepetitiveElements: Removed {} items (min Y - footer/header)", removed_footers);
-            eprintln!("RemoveRepetitiveElements: Removed {} items (max Y - header/footer)", removed_headers);
+            eprintln!(
+                "RemoveRepetitiveElements: Removed {} items (min Y - footer/header)",
+                removed_footers
+            );
+            eprintln!(
+                "RemoveRepetitiveElements: Removed {} items (max Y - header/footer)",
+                removed_headers
+            );
         }
     }
 }
@@ -116,9 +129,7 @@ fn get_item_y(item: &ItemType) -> Option<f64> {
 fn get_item_text(item: &ItemType) -> String {
     match item {
         ItemType::TextItem(t) => t.text.clone(),
-        ItemType::LineItem(l) => {
-            l.items.iter().map(|t| t.text.as_str()).collect::<String>()
-        },
+        ItemType::LineItem(l) => l.items.iter().map(|t| t.text.as_str()).collect::<String>(),
         _ => String::new(),
     }
 }
@@ -126,12 +137,16 @@ fn get_item_text(item: &ItemType) -> String {
 fn calculate_page_hashes(items: &[ItemType]) -> (u64, u64) {
     let mut min_y = f64::MAX;
     let mut max_y = f64::MIN;
-    
+
     // Find ranges
     for item in items {
         if let Some(y) = get_item_y(item) {
-            if y < min_y { min_y = y; }
-            if y > max_y { max_y = y; }
+            if y < min_y {
+                min_y = y;
+            }
+            if y > max_y {
+                max_y = y;
+            }
         }
     }
 
@@ -164,11 +179,12 @@ fn hash_string(s: &str) -> u64 {
 
     let mut hasher = DefaultHasher::new();
     // Normalize: remove digits, spaces, lowercase
-    let normalized: String = s.chars()
+    let normalized: String = s
+        .chars()
         .filter(|c| !c.is_digit(10) && !c.is_whitespace())
         .flat_map(|c| c.to_lowercase())
         .collect();
-    
+
     normalized.hash(&mut hasher);
     hasher.finish()
 }

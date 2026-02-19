@@ -1,4 +1,5 @@
 /target
 /licenses
 /lib
+/tests
 !/target/release/pdf-to-md.exe

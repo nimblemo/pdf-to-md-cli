@@ -13,7 +13,7 @@ impl Transformation for DetectCodeBlocks {
 
         for (i, page) in result.pages.iter_mut().enumerate() {
             if self.verbose {
-                eprintln!("DetectCodeBlocks: Processed {}/{} pages...", i + 1, total_pages);
+                crate::logger!("DetectCodeBlocks: Analyzing {} pages...", total_pages);
             }
 
             // Calculate min_x for the page to determine indentation
@@ -41,17 +41,23 @@ impl Transformation for DetectCodeBlocks {
 
             for (idx, item) in page.items.iter_mut().enumerate() {
                 if let crate::models::ItemType::LineItem(line) = item {
-                    let text = line.items.iter().map(|i| i.text.as_str()).collect::<Vec<_>>().join("");
+                    let text = line
+                        .items
+                        .iter()
+                        .map(|i| i.text.as_str())
+                        .collect::<Vec<_>>()
+                        .join("");
                     let is_formatted = line.items.iter().all(|i| i.format.is_some());
-                    
+
                     // Check for manual bold formatting (e.g. "**Preface**")
-                    let has_manual_bold = text.trim().starts_with("**") && text.trim().ends_with("**");
+                    let has_manual_bold =
+                        text.trim().starts_with("**") && text.trim().ends_with("**");
 
                     if text.contains("Preface") || text.contains("My special thanks") {
-                         if self.verbose {
-                             eprintln!("DEBUG: Text='{}', is_formatted={}, has_manual_bold={}, x={}, threshold={}", 
+                        if self.verbose {
+                            crate::logger!("DEBUG: Text='{}', is_formatted={}, has_manual_bold={}, x={}, threshold={}", 
                                  text, is_formatted, has_manual_bold, line.x, indent_threshold);
-                         }
+                        }
                     }
 
                     if line.block_type == BlockType::Paragraph {
@@ -66,44 +72,56 @@ impl Transformation for DetectCodeBlocks {
                             // Secondary check: Is it likely code?
                             // Code usually isn't all Bold or all Italic.
                             // "Contributors" was **Contributors** and indented -> false positive.
-                            
+
                             // Also check if text contains letters? Code usually does, but so does text.
                             // Monospace check would be ideal but we don't have is_mono yet.
                             // "Preface" case: **Preface** is bold but might not have format property set if text has **.
-                            
+
                             if !is_formatted && !has_manual_bold {
-                                if self.verbose && (text.contains("Preface") || text.contains("My special thanks")) {
-                                    eprintln!("DEBUG: Setting Code for '{}' due to indentation", text);
+                                if self.verbose
+                                    && (text.contains("Preface")
+                                        || text.contains("My special thanks"))
+                                {
+                                    crate::logger!(
+                                        "DEBUG: Setting Code for '{}' due to indentation",
+                                        text
+                                    );
                                 }
                                 line.block_type = BlockType::Code;
                             }
                         }
                     }
-                    
+
                     // Italic Check for User Rule: "if multiple lines in a row are highlighted in italics -> code block"
                     // Check if items are Italic format OR text is wrapped in underscores/asterisks
                     // AND it is not a header (by height or specific keyword)
-                    let is_likely_header = line.height > globals.most_used_height + 1.0 || text.contains("Preface");
-                    
-                    let is_italic = !is_likely_header && (
-                        line.items.iter().all(|i| matches!(i.format, Some(WordFormat::Italic) | Some(WordFormat::BoldItalic)))
-                        || (text.trim().starts_with('_') && text.trim().ends_with('_'))
-                        || (text.trim().starts_with('*') && text.trim().ends_with('*') && !has_manual_bold)
-                    );
+                    let is_likely_header =
+                        line.height > globals.most_used_height + 1.0 || text.contains("Preface");
+
+                    let is_italic = !is_likely_header
+                        && (line.items.iter().all(|i| {
+                            matches!(
+                                i.format,
+                                Some(WordFormat::Italic) | Some(WordFormat::BoldItalic)
+                            )
+                        }) || (text.trim().starts_with('_') && text.trim().ends_with('_'))
+                            || (text.trim().starts_with('*')
+                                && text.trim().ends_with('*')
+                                && !has_manual_bold));
 
                     if is_italic {
                         current_group.push(idx);
                     } else {
                         // Non-italic line breaks the group
                         if current_group.len() > 1 {
-                             groups.push(current_group.clone());
+                            groups.push(current_group.clone());
                         }
                         current_group.clear();
                     }
                 }
                 // Non-LineItems (images, etc) are ignored and do NOT break the group
             }
-            
+
             // Process last group
             if current_group.len() > 1 {
                 groups.push(current_group);
@@ -113,13 +131,21 @@ impl Transformation for DetectCodeBlocks {
             for group in groups {
                 for idx in group {
                     if let crate::models::ItemType::LineItem(line) = &mut page.items[idx] {
-                         if self.verbose {
-                             let text = line.items.iter().map(|i| i.text.as_str()).collect::<Vec<_>>().join("");
-                             if text.contains("My special thanks") {
-                                 eprintln!("DEBUG: Setting Code for '{}' due to italics group", text);
-                             }
-                         }
-                         line.block_type = BlockType::Code;
+                        if self.verbose {
+                            let text = line
+                                .items
+                                .iter()
+                                .map(|i| i.text.as_str())
+                                .collect::<Vec<_>>()
+                                .join("");
+                            if text.contains("My special thanks") {
+                                crate::logger!(
+                                    "DEBUG: Setting Code for '{}' due to italics group",
+                                    text
+                                );
+                            }
+                        }
+                        line.block_type = BlockType::Code;
                     }
                 }
             }

@@ -21,7 +21,7 @@ impl Transformation for CompactLines {
             if self.verbose {
                 let c = counter.fetch_add(1, AtomicOrdering::Relaxed) + 1;
                 if c % 50 == 0 || c == total_pages {
-                    eprintln!("CompactLines: Processed {}/{} pages...", c, total_pages);
+                    crate::logger!("CompactLines: Processed {}/{} pages...", c, total_pages);
                 }
             }
 
@@ -120,8 +120,16 @@ fn create_line_item(
         } else if gap <= space_threshold && same_font {
             // Merge words with space
             // Check for punctuation to avoid unnecessary spaces
-            let is_next_punctuation = item.text.chars().next().map_or(false, |c| ".,:;?!)]}".contains(c));
-            let is_current_open_punctuation = current_item.text.chars().last().map_or(false, |c| "([{".contains(c));
+            let is_next_punctuation = item
+                .text
+                .chars()
+                .next()
+                .map_or(false, |c| ".,:;?!)]}".contains(c));
+            let is_current_open_punctuation = current_item
+                .text
+                .chars()
+                .last()
+                .map_or(false, |c| "([{".contains(c));
 
             if !is_next_punctuation && !is_current_open_punctuation {
                 current_item.text.push(' ');
