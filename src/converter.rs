@@ -19,7 +19,10 @@ pub fn convert_file(path: &Path, verbose: bool) -> Result<String> {
     // Initialize Pdfium in main thread to verify library is present, then drop it.
     {
         let _ = Pdfium::new(
-            Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path("./"))
+            Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path("./lib/"))
+                .or_else(|_| {
+                    Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path("./"))
+                })
                 .or_else(|_| Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name()))?,
         );
     }
@@ -28,7 +31,10 @@ pub fn convert_file(path: &Path, verbose: bool) -> Result<String> {
     // We create a separate Pdfium instance just to get the page count from the file.
     let total_pages = {
         let pdfium = Pdfium::new(
-            Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path("./"))
+            Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path("./lib/"))
+                .or_else(|_| {
+                    Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path("./"))
+                })
                 .or_else(|_| Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name()))?,
         );
         let document = pdfium.load_pdf_from_file(path, None)?;
@@ -68,7 +74,10 @@ pub fn convert_file(path: &Path, verbose: bool) -> Result<String> {
         .map(|&(start, end)| {
             // Each thread creates its own Pdfium instance
             let pdfium = Pdfium::new(
-                Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path("./"))
+                Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path("./lib/"))
+                    .or_else(|_| {
+                        Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name_at_path("./"))
+                    })
                     .or_else(|_| Pdfium::bind_to_library(Pdfium::pdfium_platform_library_name()))
                     .expect("Failed to bind Pdfium in thread"),
             );
@@ -133,7 +142,7 @@ pub fn convert_file(path: &Path, verbose: bool) -> Result<String> {
     }
 
     // 5. Run Transformation Pipeline
-    
+
     if verbose {
         eprintln!("Running RemoveRepetitiveElements...");
     }
@@ -189,11 +198,11 @@ pub fn convert_file(path: &Path, verbose: bool) -> Result<String> {
         if i > 0 {
             let prev = &page_markdowns[i - 1];
             let trimmed_prev = prev.trim_end();
-            
+
             if !trimmed_prev.is_empty() {
                 let last_char = trimmed_prev.chars().last().unwrap();
                 let is_sentence_end = ".?!\"”’".contains(last_char);
-                
+
                 if is_sentence_end {
                     // Paragraph break needed. Ensure we have at least 2 newlines.
                     if !prev.ends_with("\n\n") {
@@ -208,13 +217,13 @@ pub fn convert_file(path: &Path, verbose: bool) -> Result<String> {
                     // If prev ends with \n\n, we can't easily join, but headers usually end with \n\n.
                     // If it's a paragraph split, prev likely ends with \n.
                     if !prev.ends_with('\n') {
-                         final_markdown.push('\n');
+                        final_markdown.push('\n');
                     }
                     // If prev ends with \n\n, it remains a break.
                     // If prev ends with \n, it remains a soft wrap.
                 }
             } else {
-                 final_markdown.push('\n');
+                final_markdown.push('\n');
             }
         }
         final_markdown.push_str(page_md);
@@ -260,7 +269,7 @@ fn extract_text_items(page: &PdfPage) -> Vec<ItemType> {
     //     }
     //     _ => std::cmp::Ordering::Equal,
     // });
-    
+
     // Sort logic removed to preserve content stream order (likely reading order)
     // which fixes column interleaving issues.
 

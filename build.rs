@@ -15,9 +15,13 @@ fn main() {
         _ => panic!("Unsupported target OS: {}", target_os),
     };
 
-    let destination = Path::new(&manifest_dir).join(lib_name);
+    let lib_dir = Path::new(&manifest_dir).join("lib");
+    let destination = lib_dir.join(lib_name);
 
     if !destination.exists() {
+        if !lib_dir.exists() {
+            fs::create_dir_all(&lib_dir).expect("Failed to create lib directory");
+        }
         println!(
             "cargo:warning={} not found, attempting to download for {}/{}...",
             lib_name, target_os, target_arch
@@ -25,7 +29,7 @@ fn main() {
         setup_pdfium(&manifest_dir, &target_os, &target_arch, lib_name);
     }
 
-    println!("cargo:rerun-if-changed={}", lib_name);
+    println!("cargo:rerun-if-changed=lib/{}", lib_name);
 }
 
 fn setup_pdfium(manifest_dir: &str, os: &str, arch: &str, lib_name: &str) {
@@ -50,7 +54,7 @@ fn setup_pdfium(manifest_dir: &str, os: &str, arch: &str, lib_name: &str) {
     extract_and_install(manifest_dir, &asset_name, lib_name);
     cleanup(manifest_dir, &asset_name);
 
-    println!("cargo:warning=Successfully installed {}", lib_name);
+    println!("cargo:warning=Successfully installed lib/{}", lib_name);
 }
 
 fn download_asset(manifest_dir: &str, repo: &str, asset_name: &str, os: &str) {
@@ -104,6 +108,10 @@ fn extract_and_install(manifest_dir: &str, archive: &str, lib_name: &str) {
     }
 
     let manifest_path = Path::new(manifest_dir);
+    let lib_dir = manifest_path.join("lib");
+    if !lib_dir.exists() {
+        fs::create_dir_all(&lib_dir).expect("Failed to create lib directory");
+    }
 
     // PDFium binaries structure usually has bin/ (Windows) or lib/ (Linux/macOS)
     let possible_paths = [
@@ -115,8 +123,8 @@ fn extract_and_install(manifest_dir: &str, archive: &str, lib_name: &str) {
     let mut found = false;
     for path in possible_paths {
         if path.exists() {
-            fs::copy(&path, manifest_path.join(lib_name))
-                .expect("Failed to copy library to project root");
+            fs::copy(&path, lib_dir.join(lib_name))
+                .expect("Failed to copy library to lib/ directory");
             found = true;
             break;
         }
@@ -125,13 +133,32 @@ fn extract_and_install(manifest_dir: &str, archive: &str, lib_name: &str) {
     if !found {
         panic!("Could not find {} in the extracted archive", lib_name);
     }
+
+    // Also copy metadata files if they exist in the extracted folder
+    let metadata_files = ["PDFiumConfig.cmake", "VERSION"];
+    for file in &metadata_files {
+        let source_path = manifest_path.join(file);
+        if source_path.exists() {
+            fs::copy(&source_path, lib_dir.join(file))
+                .expect("Failed to copy metadata file to lib/ directory");
+        }
+    }
 }
 
 fn cleanup(manifest_dir: &str, archive: &str) {
     let manifest_path = Path::new(manifest_dir);
     let _ = fs::remove_file(manifest_path.join(archive));
     let _ = fs::remove_dir_all(manifest_path.join("bin"));
-    let _ = fs::remove_dir_all(manifest_path.join("lib"));
+
+    // Cleanup temporary metadata files from root if they were extracted there
+    let metadata_files = ["PDFiumConfig.cmake", "VERSION"];
+    for file in &metadata_files {
+        let path = manifest_path.join(file);
+        if path.exists() {
+            let _ = fs::remove_file(path);
+        }
+    }
+
     let _ = fs::remove_dir_all(manifest_path.join("include"));
     let _ = fs::remove_file(manifest_path.join("args.gn"));
     let _ = fs::remove_file(manifest_path.join("LICENSE"));

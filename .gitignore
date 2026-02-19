@@ -1,2 +1,4 @@
 /target
+/licenses
+/lib
 !/target/release/pdf-to-md.exe
