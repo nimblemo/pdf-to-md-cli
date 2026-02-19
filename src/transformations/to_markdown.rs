@@ -123,9 +123,21 @@ impl Transformation for ToMarkdown {
                                 for item in line.items.iter().skip(1) {
                                     let gap = item.x - (prev_item.x + prev_item.width);
                                     let glue_threshold = (prev_item.font_size * 0.2).max(3.0);
+                                    let starts_with_punct =
+                                        item.text.trim().starts_with(|c: char| {
+                                            matches!(
+                                                c,
+                                                ',' | '.' | ':' | ';' | ')' | ']' | '?' | '!'
+                                            )
+                                        });
+                                    let ends_with_open_punct =
+                                        merged.trim().ends_with(|c: char| matches!(c, '(' | '['));
+
                                     if gap > glue_threshold
                                         && !merged.ends_with(' ')
                                         && !item.text.starts_with(' ')
+                                        && !starts_with_punct
+                                        && !ends_with_open_punct
                                     {
                                         merged.push(' ');
                                     }

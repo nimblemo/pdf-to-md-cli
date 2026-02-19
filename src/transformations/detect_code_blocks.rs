@@ -84,14 +84,19 @@ impl Transformation for DetectCodeBlocks {
                     let has_markdown_bold =
                         text.trim().starts_with("**") && text.trim().ends_with("**");
 
+                    let l_lower = text.to_lowercase();
+                    let has_indicators = l_has_explicit_code_indicators(&text, &l_lower);
+
                     // A line is "code-like" if it's indented and either looks like code
-                    // or is primarily plain text (not fully bold/italic)
+                    // or is primarily plain text (not fully bold/italic).
+                    // ALSO: if it has strong explicit indicators, it might be code even if not indented.
                     let looks_like_code = !is_header
-                        && is_indented
                         && !has_markdown_bold
-                        && (has_code_keywords
-                            || has_code_symbols
-                            || (is_plain && !text.is_empty()));
+                        && ((is_indented
+                            && (has_code_keywords
+                                || has_code_symbols
+                                || (is_plain && !text.is_empty())))
+                            || has_indicators);
 
                     if looks_like_code {
                         current_block.push(idx);
@@ -281,23 +286,21 @@ fn l_has_explicit_code_indicators(text: &str, lower: &str) -> bool {
     lower.contains("import ")
         || lower.contains("from ")
         || lower.contains("def ")
+        || lower.contains("async def ")
         || lower.contains("class ")
         || lower.contains("try:")
         || lower.contains("except")
         || lower.contains("return ")
         || lower.contains("print(")
-        || lower.contains("if ")
-        || lower.contains("for ")
-        || lower.contains("while ")
-        || lower.contains("with ")
+        || lower.contains("@app.")
+        || lower.contains("await ")
+        || lower.contains("asyncio.")
+        || lower.contains("if __name__")
+        || lower.starts_with("@")
         || text.contains('{')
         || text.contains('}')
         || text.contains(';')
         || text.contains("=>")
         || text.contains(" = ")
-        || text.contains(" (")
-        || text.contains(" [")
-        || text.contains("] ")
         || text.contains("):")
-        || text.contains(" # ")
 }
