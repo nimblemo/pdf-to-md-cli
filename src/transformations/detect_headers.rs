@@ -32,7 +32,7 @@ impl Transformation for DetectHeaders {
 
         // 2. Collect Distinct Heights (Global)
         // Only consider heights significantly larger than body text
-        let threshold_ratio = 1.01;
+        let threshold_ratio = 1.05;
         let min_header_height = most_used_height * threshold_ratio;
 
         let mut distinct_heights: Vec<f64> = Vec::new();
@@ -54,7 +54,7 @@ impl Transformation for DetectHeaders {
                     let h = line.items.iter().map(|i| i.font_size).fold(0.0, f64::max);
 
                     if self.verbose && page.index == 0 {
-                        crate::logger!(
+                        crate::lgger!(
                             "Page 0 Line: '{}', height={}, min_header={}",
                             text.trim(),
                             h,
@@ -73,7 +73,7 @@ impl Transformation for DetectHeaders {
         distinct_heights.sort_by(|a, b| b.partial_cmp(a).unwrap());
 
         if self.verbose {
-            crate::logger!("DetectHeaders: distinct_heights={:?}", distinct_heights);
+            crate::lgger!("DetectHeaders: distinct_heights={:?}", distinct_heights);
         }
 
         // 3. Apply Title Page & Height Logic
@@ -81,7 +81,7 @@ impl Transformation for DetectHeaders {
         let min_2nd_level = most_used_height + ((max_height - most_used_height) / 4.0);
 
         if self.verbose {
-            crate::logger!(
+            crate::lgger!(
                 "DetectHeaders: most_used_height={}, max_height={}, min_2nd_level={}",
                 most_used_height,
                 max_height,
@@ -226,8 +226,8 @@ impl Transformation for DetectHeaders {
                             }
 
                             if isolated_top {
-                                line.block_type = BlockType::H2; // Default to H2 for bold headers
-                                detected_headers += 1;
+                                // line.block_type = BlockType::H2; // Removed: don't turn into header just because bold
+                                // detected_headers += 1;
                                 continue;
                             }
                         }
@@ -262,7 +262,14 @@ impl Transformation for DetectHeaders {
                             }
                         }
 
-                        if is_all_caps && isolated && font_differs && is_short {
+                        let letter_count = text.chars().filter(|c| c.is_alphabetic()).count();
+                        if is_all_caps
+                            && isolated
+                            && font_differs
+                            && is_short
+                            && text.len() > 3
+                            && letter_count > 2
+                        {
                             line.block_type = BlockType::H6;
                             detected_headers += 1;
                         }
@@ -272,7 +279,7 @@ impl Transformation for DetectHeaders {
         }
 
         if self.verbose {
-            crate::logger!("DetectHeaders: Found {} headers", detected_headers);
+            crate::lgger!("DetectHeaders: Found {} headers", detected_headers);
         }
     }
 }

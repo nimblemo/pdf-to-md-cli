@@ -15,12 +15,12 @@ impl Transformation for ToMarkdown {
             if self.verbose {
                 counter += 1;
                 if counter % 50 == 0 || counter == total {
-                    crate::logger!("ToMarkdown: Processed {}/{} pages...", counter, total);
+                    crate::lgger!("ToMarkdown: Processed {}/{} pages...", counter, total);
                 }
             }
 
             if page_idx == 0 && !page.items.is_empty() {
-                crate::logger!("ToMarkdown: Page 0 first item: {:?}", page.items.first());
+                crate::lgger!("ToMarkdown: Page 0 first item: {:?}", page.items.first());
             }
 
             let mut markdown = String::new();
@@ -51,8 +51,28 @@ impl Transformation for ToMarkdown {
                     // Gap detection for new block/paragraph
                     if last_y > 0.0 && !last_was_header {
                         let gap = (last_y - line.y).abs();
-                        // Standard line spacing is around 1.1x-1.2x. 1.25x is a safe paragraph break.
-                        if gap > most_used_distance * 1.2 {
+                        // Standard line spacing is around 1.1x-1.2x. 1.1x is a safer paragraph break for some PDFs.
+                        let mut needs_break = gap > most_used_distance * 1.1;
+
+                        // Heuristic: if a line looks like a chapter/section heading but isn't marked as one
+                        // force a break regardless of gap if it's isolated enough (gap > 0.8 * dist)
+                        if !needs_break && gap > most_used_distance * 0.8 {
+                            let text = line
+                                .items
+                                .iter()
+                                .map(|i| i.text.as_str())
+                                .collect::<Vec<_>>()
+                                .join("");
+                            let trimmed = text.trim_matches(|c| c == '*' || c == '_').trim();
+                            if trimmed.to_lowercase().starts_with("chapter")
+                                || trimmed.to_lowercase().starts_with("part")
+                                || trimmed.to_lowercase().starts_with("appendix")
+                            {
+                                needs_break = true;
+                            }
+                        }
+
+                        if needs_break {
                             markdown.push_str("\n");
                         }
                     }
@@ -95,20 +115,64 @@ impl Transformation for ToMarkdown {
                     ItemType::LineItem(line) => {
                         // For TOC items and Code, we want to preserve whitespace/indentation.
                         // For others, we normalize.
-                        let text =
+                        let text = {
+                            let mut merged = String::new();
+                            if !line.items.is_empty() {
+                                let mut prev_item = &line.items[0];
+                                merged.push_str(&prev_item.text);
+                                for item in line.items.iter().skip(1) {
+                                    let gap = item.x - (prev_item.x + prev_item.width);
+                                    let glue_threshold = (prev_item.font_size * 0.2).max(3.0);
+                                    if gap > glue_threshold
+                                        && !merged.ends_with(' ')
+                                        && !item.text.starts_with(' ')
+                                    {
+                                        merged.push(' ');
+                                    }
+                                    merged.push_str(&item.text);
+                                    prev_item = item;
+                                }
+                            }
+
                             if matches!(line.block_type, BlockType::TocItem(_) | BlockType::Code) {
-                                line.items
-                                    .iter()
-                                    .map(|i| i.text.as_str())
-                                    .collect::<Vec<_>>()
-                                    .join(" ")
+                                merged
                             } else {
-                                line.items
-                                    .iter()
-                                    .flat_map(|i| i.text.split_whitespace())
-                                    .collect::<Vec<_>>()
-                                    .join(" ")
-                            };
+                                // Implement hyphen removal: if a line ends with a hyphen, remove it.
+                                if merged.ends_with('-') {
+                                    merged.pop(); // Remove the hyphen
+                                }
+
+                                // Fix range spacing: "66 - 68" -> "66-68"
+                                let cleaned =
+                                    merged.split_whitespace().collect::<Vec<_>>().join(" ");
+
+                                // Regex-like replacement for "number - number"
+                                // We'll do it simply with string replacement if it matches pattern
+                                // For indices specifically:
+                                let mut final_text = String::new();
+                                let tokens: Vec<&str> = cleaned.split(' ').collect();
+                                for (i, token) in tokens.iter().enumerate() {
+                                    if *token == "-" && i > 0 && i < tokens.len() - 1 {
+                                        let prev = tokens[i - 1];
+                                        let next = tokens[i + 1];
+                                        if prev.chars().all(|c| c.is_numeric())
+                                            && next.chars().all(|c| c.is_numeric())
+                                        {
+                                            if !final_text.is_empty() {
+                                                final_text.pop(); // Remove the space before '-'
+                                            }
+                                            final_text.push_str("-");
+                                            continue;
+                                        }
+                                    }
+                                    if i > 0 && !final_text.ends_with('-') {
+                                        final_text.push(' ');
+                                    }
+                                    final_text.push_str(token);
+                                }
+                                final_text
+                            }
+                        };
 
                         let is_header = matches!(
                             line.block_type,

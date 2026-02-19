@@ -46,7 +46,7 @@ impl Transformation for RemoveRepetitiveElements {
         let threshold = threshold.max(3);
 
         if self.verbose {
-            crate::logger!(
+            crate::lgger!(
                 "RemoveRepetitiveElements: Analyzing {} pages...",
                 result.pages.len()
             );
@@ -106,11 +106,11 @@ impl Transformation for RemoveRepetitiveElements {
         }
 
         if self.verbose {
-            eprintln!(
+            crate::lgger!(
                 "RemoveRepetitiveElements: Removed {} items (min Y - footer/header)",
                 removed_footers
             );
-            eprintln!(
+            crate::lgger!(
                 "RemoveRepetitiveElements: Removed {} items (max Y - header/footer)",
                 removed_headers
             );

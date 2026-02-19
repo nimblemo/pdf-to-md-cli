@@ -18,7 +18,7 @@ pub fn log_msg(msg: &str) {
 }
 
 #[macro_export]
-macro_rules! logger {
+macro_rules! lgger {
     ($($arg:tt)*) => {
         $crate::logger::log_msg(&format!($($arg)*));
     };

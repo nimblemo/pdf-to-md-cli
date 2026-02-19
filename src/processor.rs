@@ -23,12 +23,12 @@ pub fn run(
     let files = collect_pdf_files(input)?;
 
     if files.is_empty() {
-        crate::logger!("No PDF files found in: {}", input.display());
+        crate::lgger!("No PDF files found in: {}", input.display());
         return Ok(());
     }
 
     if verbose {
-        crate::logger!(
+        crate::lgger!(
             "Processing {} PDF file(s) using {} threads...",
             files.len(),
             rayon::current_num_threads()
@@ -54,7 +54,7 @@ pub fn run(
     let mut had_error = false;
     for result in results {
         if let Err(e) = result {
-            crate::logger!("Error: {:#}", e);
+            crate::lgger!("Error: {:#}", e);
             had_error = true;
         }
     }
@@ -110,7 +110,7 @@ fn process_single_file(
 
     // Only print progress if processing multiple files or verbose
     if verbose || total_files > 1 {
-        crate::logger!("Converting: {}", input_path.display());
+        crate::lgger!("Converting: {}", input_path.display());
     }
 
     let markdown = crate::converter::convert_file(input_path, verbose)
@@ -143,10 +143,10 @@ fn process_single_file(
 
     if verbose || total_files > 1 {
         let duration = start.elapsed();
-        crate::logger!("Finished: {} in {:.2?}", output_path.display(), duration);
+        crate::lgger!("Finished: {} in {:.2?}", output_path.display(), duration);
     } else {
         // Single file quiet mode
-        crate::logger!("Created: {}", output_path.display());
+        crate::lgger!("Created: {}", output_path.display());
     }
 
     Ok(())

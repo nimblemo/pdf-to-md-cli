@@ -17,11 +17,15 @@ impl Transformation for CompactLines {
 
         let globals = &result.globals;
 
+        if self.verbose {
+            crate::lgger!("CompactLines: Processing {} pages...", result.pages.len());
+        }
+
         result.pages.par_iter_mut().for_each(|page| {
             if self.verbose {
                 let c = counter.fetch_add(1, AtomicOrdering::Relaxed) + 1;
                 if c % 50 == 0 || c == total_pages {
-                    crate::logger!("CompactLines: Processed {}/{} pages...", c, total_pages);
+                    crate::lgger!("CompactLines: Processed {}/{} pages...", c, total_pages);
                 }
             }
 
@@ -108,7 +112,7 @@ fn create_line_item(
 
     for item in items.into_iter().skip(1) {
         let gap = item.x - (current_item.x + current_item.width);
-        let glue_threshold = 5.0;
+        let glue_threshold = (current_item.font_size * 0.2).max(5.0);
         let space_threshold = (current_item.font_size * 2.0).max(30.0);
         let same_font = item.font == current_item.font;
 

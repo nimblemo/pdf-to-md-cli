@@ -11,9 +11,9 @@ impl Transformation for DetectCodeBlocks {
         let _most_used_distance = globals.most_used_distance;
         let total_pages = result.pages.len();
 
-        for (i, page) in result.pages.iter_mut().enumerate() {
+        for (_i, page) in result.pages.iter_mut().enumerate() {
             if self.verbose {
-                crate::logger!("DetectCodeBlocks: Analyzing {} pages...", total_pages);
+                crate::lgger!("DetectCodeBlocks: Analyzing {} pages...", total_pages);
             }
 
             // Calculate min_x for the page to determine indentation
@@ -35,11 +35,11 @@ impl Transformation for DetectCodeBlocks {
             // But keeping a small buffer for float precision.
             let indent_threshold = min_x + 2.0;
 
-            // Collect groups of consecutive italics
-            let mut groups = Vec::new();
-            let mut current_group = Vec::new();
+            // Collect groups of consecutive lines that *might* be code
+            let mut current_block = Vec::new();
+            let mut lines_to_mark_as_code = Vec::new();
 
-            for (idx, item) in page.items.iter_mut().enumerate() {
+            for (idx, item) in page.items.iter().enumerate() {
                 if let crate::models::ItemType::LineItem(line) = item {
                     let text = line
                         .items
@@ -47,54 +47,127 @@ impl Transformation for DetectCodeBlocks {
                         .map(|i| i.text.as_str())
                         .collect::<Vec<_>>()
                         .join("");
-                    let is_formatted = line.items.iter().all(|i| i.format.is_some());
 
-                    // Check for manual bold formatting (e.g. "**Preface**")
-                    let has_manual_bold =
+                    let is_header =
+                        line.height > globals.most_used_height + 1.0 || text.contains("Preface");
+
+                    // Heuristic for code-like symbols and keywords
+                    let has_code_keywords = {
+                        let lower = text.to_lowercase();
+                        lower.contains("import ")
+                            || lower.contains("from ")
+                            || lower.contains("def ")
+                            || lower.contains("class ")
+                            || lower.contains("try:")
+                            || lower.contains("except")
+                            || lower.contains("return ")
+                            || lower.contains("print(")
+                            || lower.contains("if ")
+                            || lower.contains("for ")
+                            || lower.contains("while ")
+                            || lower.contains("with ")
+                    };
+
+                    let has_code_symbols = text.contains('{')
+                        || text.contains('}')
+                        || text.contains(';')
+                        || text.contains("=>")
+                        || text.contains(" = ")
+                        || text.contains(" (")
+                        || text.contains(" [")
+                        || text.contains("] ")
+                        || text.contains("):")
+                        || text.contains(" # ");
+
+                    let is_indented = line.x > indent_threshold;
+                    let is_plain = line.items.iter().all(|i| i.format.is_none());
+                    let has_markdown_bold =
                         text.trim().starts_with("**") && text.trim().ends_with("**");
 
-                    if text.contains("Preface") || text.contains("My special thanks") {
-                        if self.verbose {
-                            crate::logger!("DEBUG: Text='{}', is_formatted={}, has_manual_bold={}, x={}, threshold={}", 
-                                 text, is_formatted, has_manual_bold, line.x, indent_threshold);
-                        }
-                    }
+                    // A line is "code-like" if it's indented and either looks like code
+                    // or is primarily plain text (not fully bold/italic)
+                    let looks_like_code = !is_header
+                        && is_indented
+                        && !has_markdown_bold
+                        && (has_code_keywords
+                            || has_code_symbols
+                            || (is_plain && !text.is_empty()));
 
-                    if line.block_type == BlockType::Paragraph {
-                        // Check indentation
-                        if line.x > indent_threshold {
-                            // Check height: Single lines that are tall are likely Headers/Titles, not Code.
-                            // e.g. "David N. Blank-Edelman" (21.0) vs most_used (10.5)
-                            if line.height > globals.most_used_height + 1.0 {
-                                continue;
-                            }
-
-                            // Secondary check: Is it likely code?
-                            // Code usually isn't all Bold or all Italic.
-                            // "Contributors" was **Contributors** and indented -> false positive.
-
-                            // Also check if text contains letters? Code usually does, but so does text.
-                            // Monospace check would be ideal but we don't have is_mono yet.
-                            // "Preface" case: **Preface** is bold but might not have format property set if text has **.
-
-                            if !is_formatted && !has_manual_bold {
-                                if self.verbose
-                                    && (text.contains("Preface")
-                                        || text.contains("My special thanks"))
+                    if looks_like_code {
+                        current_block.push(idx);
+                    } else {
+                        // If we have a block of indented/code-like lines, mark them
+                        if !current_block.is_empty() {
+                            // If it's just one line, it MUST have code symbols/keywords or be very specific
+                            if current_block.len() == 1 {
+                                let line_idx = current_block[0];
+                                if let crate::models::ItemType::LineItem(l) = &page.items[line_idx]
                                 {
-                                    crate::logger!(
-                                        "DEBUG: Setting Code for '{}' due to indentation",
-                                        text
-                                    );
+                                    let l_text = l
+                                        .items
+                                        .iter()
+                                        .map(|i| i.text.as_str())
+                                        .collect::<Vec<_>>()
+                                        .join("");
+                                    let l_lower = l_text.to_lowercase();
+                                    if l_has_explicit_code_indicators(&l_text, &l_lower) {
+                                        lines_to_mark_as_code.push(line_idx);
+                                    }
                                 }
-                                line.block_type = BlockType::Code;
+                            } else {
+                                // 2+ lines indented/plain/code-like -> mark as code
+                                lines_to_mark_as_code.extend(current_block.iter());
                             }
                         }
+                        current_block.clear();
                     }
+                }
+            }
 
-                    // Italic Check for User Rule: "if multiple lines in a row are highlighted in italics -> code block"
-                    // Check if items are Italic format OR text is wrapped in underscores/asterisks
-                    // AND it is not a header (by height or specific keyword)
+            // Process last block
+            if !current_block.is_empty() {
+                if current_block.len() > 1 {
+                    lines_to_mark_as_code.extend(current_block.iter());
+                } else {
+                    let line_idx = current_block[0];
+                    if let crate::models::ItemType::LineItem(l) = &page.items[line_idx] {
+                        let l_text = l
+                            .items
+                            .iter()
+                            .map(|i| i.text.as_str())
+                            .collect::<Vec<_>>()
+                            .join("");
+                        let l_lower = l_text.to_lowercase();
+                        if l_has_explicit_code_indicators(&l_text, &l_lower) {
+                            lines_to_mark_as_code.push(line_idx);
+                        }
+                    }
+                }
+            }
+
+            // Apply collected code markers
+            for &idx in &lines_to_mark_as_code {
+                if let crate::models::ItemType::LineItem(line) = &mut page.items[idx] {
+                    line.block_type = BlockType::Code;
+                }
+            }
+
+            // Italic Check for User Rule: "if multiple lines in a row are highlighted in italics -> code block"
+            // This is still useful for some special blocks
+            let mut italic_groups = Vec::new();
+            let mut current_italic_group = Vec::new();
+
+            for (idx, item) in page.items.iter().enumerate() {
+                if let crate::models::ItemType::LineItem(line) = item {
+                    if line.block_type == BlockType::Code {
+                        continue;
+                    }
+                    let text = line
+                        .items
+                        .iter()
+                        .map(|i| i.text.as_str())
+                        .collect::<Vec<_>>()
+                        .join("");
                     let is_likely_header =
                         line.height > globals.most_used_height + 1.0 || text.contains("Preface");
 
@@ -105,46 +178,25 @@ impl Transformation for DetectCodeBlocks {
                                 Some(WordFormat::Italic) | Some(WordFormat::BoldItalic)
                             )
                         }) || (text.trim().starts_with('_') && text.trim().ends_with('_'))
-                            || (text.trim().starts_with('*')
-                                && text.trim().ends_with('*')
-                                && !has_manual_bold));
+                            || (text.trim().starts_with('*') && text.trim().ends_with('*')));
 
                     if is_italic {
-                        current_group.push(idx);
+                        current_italic_group.push(idx);
                     } else {
-                        // Non-italic line breaks the group
-                        if current_group.len() > 1 {
-                            groups.push(current_group.clone());
+                        if current_italic_group.len() > 1 {
+                            italic_groups.push(current_italic_group.clone());
                         }
-                        current_group.clear();
+                        current_italic_group.clear();
                     }
                 }
-                // Non-LineItems (images, etc) are ignored and do NOT break the group
+            }
+            if current_italic_group.len() > 1 {
+                italic_groups.push(current_italic_group);
             }
 
-            // Process last group
-            if current_group.len() > 1 {
-                groups.push(current_group);
-            }
-
-            // Apply groups
-            for group in groups {
+            for group in italic_groups {
                 for idx in group {
                     if let crate::models::ItemType::LineItem(line) = &mut page.items[idx] {
-                        if self.verbose {
-                            let text = line
-                                .items
-                                .iter()
-                                .map(|i| i.text.as_str())
-                                .collect::<Vec<_>>()
-                                .join("");
-                            if text.contains("My special thanks") {
-                                crate::logger!(
-                                    "DEBUG: Setting Code for '{}' due to italics group",
-                                    text
-                                );
-                            }
-                        }
                         line.block_type = BlockType::Code;
                     }
                 }
@@ -223,4 +275,29 @@ impl DetectCodeBlocks {
             }
         }
     }
+}
+
+fn l_has_explicit_code_indicators(text: &str, lower: &str) -> bool {
+    lower.contains("import ")
+        || lower.contains("from ")
+        || lower.contains("def ")
+        || lower.contains("class ")
+        || lower.contains("try:")
+        || lower.contains("except")
+        || lower.contains("return ")
+        || lower.contains("print(")
+        || lower.contains("if ")
+        || lower.contains("for ")
+        || lower.contains("while ")
+        || lower.contains("with ")
+        || text.contains('{')
+        || text.contains('}')
+        || text.contains(';')
+        || text.contains("=>")
+        || text.contains(" = ")
+        || text.contains(" (")
+        || text.contains(" [")
+        || text.contains("] ")
+        || text.contains("):")
+        || text.contains(" # ")
 }

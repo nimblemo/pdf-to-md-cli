@@ -46,7 +46,7 @@ fn init_pdfium_library() -> Result<Box<dyn PdfiumLibraryBindings>> {
 /// Convert a PDF file at `path` to a Markdown string.
 pub fn convert_file(path: &Path, verbose: bool) -> Result<String> {
     if verbose {
-        crate::logger!("Loading PDF from: {}", path.display());
+        crate::lgger!("Loading PDF from: {}", path.display());
     }
 
     // Initialize Pdfium in main thread to verify library is present, then drop it.
@@ -63,7 +63,7 @@ pub fn convert_file(path: &Path, verbose: bool) -> Result<String> {
     };
 
     if verbose {
-        crate::logger!("Total pages: {}", total_pages);
+        crate::lgger!("Total pages: {}", total_pages);
     }
 
     // 3. Extract Pages Parallelly
@@ -80,7 +80,7 @@ pub fn convert_file(path: &Path, verbose: bool) -> Result<String> {
         .collect();
 
     if verbose {
-        crate::logger!(
+        crate::lgger!(
             "Processing {} pages using {} threads ({} chunks)...",
             total_pages,
             num_threads,
@@ -119,7 +119,7 @@ pub fn convert_file(path: &Path, verbose: bool) -> Result<String> {
                 if verbose {
                     let c = extraction_counter.fetch_add(1, Ordering::Relaxed) + 1;
                     if c % 10 == 0 || c == total_pages as usize {
-                        crate::logger!("Extracted page {}/{}", c, total_pages);
+                        crate::lgger!("Extracted page {}/{}", c, total_pages);
                     }
                 }
             }
@@ -132,7 +132,7 @@ pub fn convert_file(path: &Path, verbose: bool) -> Result<String> {
     pages.sort_by_key(|p| p.index);
 
     if verbose {
-        crate::logger!(
+        crate::lgger!(
             "Extracted {} pages in total. Calculating global stats...",
             pages.len()
         );
@@ -148,7 +148,7 @@ pub fn convert_file(path: &Path, verbose: bool) -> Result<String> {
     CalculateGlobalStats { verbose }.transform(&mut result);
 
     if verbose {
-        eprintln!(
+        crate::lgger!(
             "Global stats: most_used_height={}, most_used_font='{}', most_used_distance={}",
             result.globals.most_used_height,
             result.globals.most_used_font,
@@ -159,35 +159,35 @@ pub fn convert_file(path: &Path, verbose: bool) -> Result<String> {
     // 5. Run Transformation Pipeline
 
     if verbose {
-        crate::logger!("Running RemoveRepetitiveElements...");
+        crate::lgger!("Running RemoveRepetitiveElements...");
     }
     use crate::transformations::remove_repetitive_elements::RemoveRepetitiveElements;
     RemoveRepetitiveElements { verbose }.transform(&mut result);
 
     if verbose {
-        crate::logger!("Running CompactLines...");
+        crate::lgger!("Running CompactLines...");
     }
     CompactLines { verbose }.transform(&mut result);
 
     if verbose {
-        crate::logger!("Running DetectCodeBlocks...");
+        crate::lgger!("Running DetectCodeBlocks...");
     }
     use crate::transformations::detect_code_blocks::DetectCodeBlocks;
     DetectCodeBlocks { verbose }.transform(&mut result);
 
     if verbose {
-        eprintln!("Running DetectTOC...");
+        crate::lgger!("Running DetectTOC...");
     }
     use crate::transformations::detect_toc::DetectTOC;
     DetectTOC { verbose }.transform(&mut result);
 
     if verbose {
-        eprintln!("Running DetectHeaders...");
+        crate::lgger!("Running DetectHeaders...");
     }
     DetectHeaders { verbose }.transform(&mut result);
 
     if verbose {
-        eprintln!("Generating Markdown...");
+        crate::lgger!("Generating Markdown...");
     }
     ToMarkdown { verbose }.transform(&mut result);
 

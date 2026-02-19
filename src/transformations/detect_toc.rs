@@ -152,7 +152,7 @@ impl Transformation for DetectTOC {
                     processed_items += 1;
 
                     if page_idx == 6 && self.verbose {
-                        eprintln!(
+                        crate::lgger!(
                             "DEBUG: Page 6 Line raw: {:?}",
                             line.items.iter().map(|w| &w.text).collect::<Vec<_>>()
                         );
@@ -223,24 +223,28 @@ impl Transformation for DetectTOC {
                             .map(|w| w.text.as_str())
                             .collect::<Vec<_>>()
                             .join(" ");
-                        eprintln!("DEBUG: Page 6 processed words: {:?}, digits: '{}', ends_with_digit: {}", 
+                        crate::lgger!("DEBUG: Page 6 processed words: {:?}, digits: '{}', ends_with_digit: {}", 
                              words.iter().map(|w| &w.text).collect::<Vec<_>>(),
                              digits,
                              ends_with_digit
                          );
                         if !digits.is_empty() || text.contains("First Things First") {
-                            eprintln!("DEBUG: detailed digit check for '{}':", text);
+                            crate::lgger!("DEBUG: detailed digit check for '{}':", text);
                             if let Some(last_idx) = words.len().checked_sub(1) {
                                 let last = &words[last_idx];
                                 let original = &last.text;
                                 let trimmed =
                                     original.trim_end_matches(|c| c == '*' || c == '_' || c == ' ');
-                                eprintln!("  Original: '{}'", original);
-                                eprintln!("  Trimmed: '{}'", trimmed);
+                                crate::lgger!("  Original: '{}'", original);
+                                crate::lgger!("  Trimmed: '{}'", trimmed);
                                 if let Some(c) = trimmed.chars().last() {
-                                    eprintln!("  Last char: '{}', is_digit: {}", c, c.is_digit(10));
+                                    crate::lgger!(
+                                        "  Last char: '{}', is_digit: {}",
+                                        c,
+                                        c.is_digit(10)
+                                    );
                                 } else {
-                                    eprintln!("  Trimmed is empty");
+                                    crate::lgger!("  Trimmed is empty");
                                 }
                             }
                         }
@@ -255,9 +259,10 @@ impl Transformation for DetectTOC {
                             let gap = (last_y.unwrap_or(line.y) - line.y).abs();
 
                             if page_idx == 6 && self.verbose {
-                                eprintln!(
+                                crate::lgger!(
                                     "DEBUG: Merge check. gap={:.2}, threshold={:.2}",
-                                    gap, threshold
+                                    gap,
+                                    threshold
                                 );
                             }
 
@@ -295,12 +300,17 @@ impl Transformation for DetectTOC {
                                 || text.contains("Talking About Failure")
                                 || text.contains("Postincident Reviews")
                             {
-                                eprintln!("DEBUG: TOC Item '{}' X={:.2}", text, link_line_item.x);
+                                crate::lgger!(
+                                    "DEBUG: TOC Item '{}' X={:.2}",
+                                    text,
+                                    link_line_item.x
+                                );
                             }
                             if link_line_item.x > 77.0 && link_line_item.x < 80.0 {
-                                eprintln!(
+                                crate::lgger!(
                                     "DEBUG: Found item at X={:.2}: '{}'",
-                                    link_line_item.x, text
+                                    link_line_item.x,
+                                    text
                                 );
                             }
                         }
@@ -340,7 +350,7 @@ impl Transformation for DetectTOC {
                 unknown_lines_by_page.insert(page_idx, unknown_lines);
 
                 if self.verbose {
-                    crate::logger!("DEBUG: Detected TOC page {}", page.index);
+                    crate::lgger!("DEBUG: Detected TOC page {}", page.index);
                 }
             }
         }
@@ -402,7 +412,7 @@ impl Transformation for DetectTOC {
 
                     if seq_idx > 0 && check_repetitive(clean_line_text) {
                         if self.verbose {
-                            eprintln!(
+                            crate::lgger!(
                                 "DEBUG: Removing repetitive TOC header (dynamic): '{}'",
                                 clean_line_text
                             );
@@ -413,7 +423,7 @@ impl Transformation for DetectTOC {
                     // Remove repetitive "Table of Contents" headers on subsequent pages (Fallback for partial matches)
                     if seq_idx > 0 && clean_line_text.to_lowercase().contains("table of contents") {
                         if self.verbose {
-                            eprintln!(
+                            crate::lgger!(
                                 "DEBUG: Removing repetitive TOC header: '{}'",
                                 clean_line_text
                             );
@@ -435,7 +445,7 @@ impl Transformation for DetectTOC {
                         valid_unknown_lines.insert(idx);
                         if seq_idx == 0 {
                             if self.verbose {
-                                eprintln!("DEBUG: Learned TOC header: '{}'", clean_line_text);
+                                crate::lgger!("DEBUG: Learned TOC header: '{}'", clean_line_text);
                             }
                             first_page_headers.insert(clean_line_text.to_string());
 
@@ -450,9 +460,10 @@ impl Transformation for DetectTOC {
                             }
                         }
                     } else if self.verbose {
-                        eprintln!(
+                        crate::lgger!(
                             "DEBUG: Removing duplicate unknown line {}: '{}'",
-                            idx, clean_line_text
+                            idx,
+                            clean_line_text
                         );
                     }
                 }

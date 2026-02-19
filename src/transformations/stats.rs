@@ -9,10 +9,7 @@ pub struct CalculateGlobalStats {
 impl Transformation for CalculateGlobalStats {
     fn transform(&self, result: &mut ParseResult) {
         if self.verbose {
-            crate::logger!(
-                "CalculateGlobalStats: Analyzing {} pages...",
-                result.pages.len()
-            );
+            crate::lgger!("Calculating global stats...");
         }
         result.globals = calculate_global_stats(&result.pages);
     }
