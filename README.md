@@ -1,22 +1,22 @@
 # pdf-to-md
 
-Быстрый и эффективный конвертер PDF в Markdown, написанный на Rust с использованием параллельной обработки. Основанный на семантическом анализе PDF-документа. Качество может сильно варироваться, но это дешевле и быстрее чем использование OCR. В определенных случаях может быть полезно для конвертации документов в MD
+A fast and efficient PDF to Markdown converter written in Rust using parallel processing. Based on semantic analysis of PDF documents. Quality may vary, but it's cheaper and faster than using OCR. In certain cases, it can be useful for converting documents to Markdown.
 
-## Особенности
+## Features
 
-- TODO: **Высокая производительность**: Использует все доступные ядра процессора благодаря `rayon` для параллельной обработки страниц и файлов. 
-- **Кроссплатформенность**: Автоматическая загрузка и настройка необходимых библиотек PDFium для Windows, Linux и macOS.
-- **Гибкость**: Поддержка обработки как отдельных файлов, так и целых директорий.
-- **Умное форматирование**: Извлечение текста с сохранением логической структуры (заголовки, параграфы).
+- **High Performance**: Uses all available CPU cores thanks to `rayon` for parallel processing of pages and files. (Note: Performance optimizations are ongoing).
+- **Cross-platform**: Automatic download and setup of required PDFium libraries for Windows, Linux, and macOS.
+- **Flexibility**: Supports processing of both single files and entire directories.
+- **Smart Formatting**: Extracts text while preserving logical structure (headers, paragraphs).
 
-## Требования
+## Requirements
 
-- **Rust** (последняя стабильная версия).
-- **Утилита `tar`**: Должна быть доступна в системе для распаковки библиотек при первой сборке (в Windows 10+ она встроена).
+- **Rust** (latest stable version).
+- **`tar` utility**: Must be available in the system to extract libraries during the first build (built-in in Windows 10+).
 
-## Установка и сборка
+## Installation and Build
 
-Проект автоматически заботится о своих зависимостях (PDFium). Вам достаточно просто собрать проект:
+The project automatically manages its dependencies (PDFium). You only need to build the project:
 
 ```bash
 git clone <repository-url>
@@ -24,42 +24,42 @@ cd pdf-to-md
 cargo build --release
 ```
 
-При первом запуске `cargo build` скрипт автоматически скачает нужную версию библиотеки (например, `pdfium.dll`) и сохранит её в каталог `lib/` в корне проекта.
+During the first `cargo build`, the script will automatically download the correct version of the library (e.g., `pdfium.dll`) and store it in the `lib/` directory in the project root.
 
-## Использование
+## Usage
 
-### Основные команды
+### Basic Commands
 
-**Конвертация отдельного файла:**
+**Convert a single file:**
 ```bash
 cargo run -- input.pdf
 ```
 
-**Конвертация всех PDF в папке:**
+**Convert all PDFs in a folder:**
 ```bash
 cargo run -- ./my_pdfs/
 ```
 
-**Указание выходной директории:**
+**Specify output directory:**
 ```bash
 cargo run -- input.pdf -o ./output_folder/
 ```
 
-**Вывод результата в консоль (stdout):**
+**Output to console (stdout):**
 ```bash
 cargo run -- input.pdf --stdout
 ```
 
-### Все аргументы
+### Arguments Reference
 
-| Аргумент | Описание |
+| Argument | Description |
 | :--- | :--- |
-| `INPUT` | Путь к PDF файлу или директории с файлами. |
-| `-o, --output <DIR>` | Директория для сохранения `.md` файлов (по умолчанию — текущая). |
-| `-n, --name <NAME>` | Имя выходного файла (только для работы с одним файлом). |
-| `-s, --stdout` | Выводить результат в консоль вместо записи в файлы. |
-| `-v, --verbose` | Включить подробный вывод отладочной информации. |
+| `INPUT` | Path to a PDF file or a directory containing files. |
+| `-o, --output <DIR>` | Directory to save `.md` files (default is current directory). |
+| `-n, --name <NAME>` | Output filename (only for single file input). |
+| `-s, --stdout` | Print result to console instead of writing to files. |
+| `-v, --verbose` | Enable detailed debug information. |
 
-## Лицензия
+## License
 
-Этот проект распространяется под лицензией MIT. Подробности в файле `LICENSE` (если применимо).
+This project is distributed under the MIT License. See the `LICENSE` file for details (if applicable).
